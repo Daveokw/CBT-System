@@ -78,6 +78,20 @@ async function openApp(page, target) {
   }
 }
 
+async function openReadyApp(page, target) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await openApp(page, target);
+      return await waitForState(page, 120000, true);
+    } catch (error) {
+      if (attempt === 2) throw error;
+      console.log(`The CBT interface was not detected (${error.message}). Reloading once in 15 seconds.`);
+      await page.waitForTimeout(15000);
+    }
+  }
+  throw new Error('The CBT interface could not be verified after a reload.');
+}
+
 async function run() {
   let browser;
   let page;
@@ -86,8 +100,7 @@ async function run() {
     console.log('Starting the CBT System availability check.');
     browser = await chromium.launch({ headless: true });
     page = await browser.newPage();
-    await openApp(page, target);
-    const wakeControl = await waitForState(page, 120000, true);
+    const wakeControl = await openReadyApp(page, target);
     if (wakeControl) {
       console.log('The app is sleeping; requesting wake-up.');
       await wakeControl.click({ timeout: 10000 });
