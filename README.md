@@ -28,6 +28,8 @@ The [keep-alive workflow](.github/workflows/keep_alive.yml) checks the public ap
 
 This is a best-effort availability check, not a guarantee that the app will never sleep: Streamlit can still suspend or redeploy the app, and scheduled GitHub Actions can run late, be missed, or be disabled after repository inactivity. Check the workflow result and the live URL after deployment; visitors can wake a sleeping public app themselves.
 
+The monthly `Record Repository Activity` workflow updates `.github/repository-heartbeat.txt` on the first day of each month at 03:17 UTC so the repository stays active even when no code is being developed. It can also be triggered manually from the **Actions** tab. GitHub may automatically disable scheduled workflows in a public repository after roughly 60 days without repository activity; the heartbeat runs well before that limit to keep all scheduled workflows enabled.
+
 ## Built-in AI assistance
 
 When keys are configured, the app tries Gemini 3.5 Flash-Lite, Gemini 3.1 Flash-Lite, then Groq's GPT-OSS 20B. An invalid Gemini key or a Gemini rate-limit response skips the second Gemini attempt. If only one provider is configured, it uses that provider directly. There is no per-user AI switch. The core question parser, keyword-based classifier, and deterministic reports remain available when AI is absent, unavailable, or over the demo allowance. Set `GEMINI_API_KEY` and/or `GROQ_API_KEY` in your ignored local `.env` or as **root-level Streamlit secrets**. Do not commit either key.
