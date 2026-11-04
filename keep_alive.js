@@ -68,6 +68,10 @@ async function openApp(page, target) {
       failure = error;
     }
     if (!failure) {
+      const loadedUrl = new URL(page.url());
+      if (loadedUrl.hostname === 'share.streamlit.io' || loadedUrl.pathname.startsWith('/-/login')) {
+        throw new Error('The Streamlit app requires sign-in. Set its sharing access to public before running this availability check.');
+      }
       if (!response || response.status() < 400) return;
       failure = new Error(`The app returned HTTP ${response.status()}.`);
       if (![403, 429, 502, 503, 504].includes(response.status())) throw failure;
