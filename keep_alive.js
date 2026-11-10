@@ -1,6 +1,13 @@
-const { chromium } = require('playwright');
+let chromium;
+try {
+  chromium = require('playwright').chromium;
+} catch (_) {
+  // Playwright is installed in CI workflows; allowed to be absent in unit tests
+}
 
+const APP_HEADING = 'CBT System';
 const FAILURE_SCREENSHOT = 'keep_alive_screenshot.png';
+const WAKE_CONTROL_PATTERN = /wake(?: up)?|back up|restart(?: this)? app|run(?: this)? app/i;
 
 function validatedTarget(rawValue) {
   if (!rawValue) throw new Error('Pass the public Streamlit app URL to the availability check.');
@@ -14,6 +21,48 @@ function validatedTarget(rawValue) {
   return target.toString();
 }
 
+async function applicationIsReady(page) {
+  for (const frame of page.frames()) {
+    const heading = frame.getByRole('heading', { name: APP_HEADING }).first();
+    const container = frame.locator('[data-testid="stAppViewContainer"]').first();
+    if (await heading.isVisible().catch(() => false)
+        && await container.isVisible().catch(() => false)) return true;
+  }
+  return false;
+}
+
+async function visibleWakeControl(page) {
+  for (const frame of page.frames()) {
+    for (const role of ['button', 'link']) {
+      const control = frame.getByRole(role, { name: WAKE_CONTROL_PATTERN }).first();
+      if (await control.isVisible().catch(() => false)) return control;
+    }
+  }
+  return null;
+}
+
+async function observedFrames(page) {
+  const observations = [];
+  for (const frame of page.frames()) {
+    const body = await frame.locator('body').innerText().catch(() => '');
+    observations.push(`${frame.url()} :: ${body.replace(/\s+/g, ' ').trim().slice(0, 160) || '[no body text]'}`);
+  }
+  return observations.join(' | ');
+}
+
+async function waitForState(page, timeoutMs, acceptWakeControl) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await applicationIsReady(page)) return null;
+    if (acceptWakeControl) {
+      const control = await visibleWakeControl(page);
+      if (control) return control;
+    }
+    await page.waitForTimeout(1000);
+  }
+  throw new Error(`The CBT interface did not become ready. Observed frames: ${await observedFrames(page)}`);
+}
+
 async function openApp(page, target) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     let failure;
@@ -24,6 +73,10 @@ async function openApp(page, target) {
       failure = error;
     }
     if (!failure) {
+      const loadedUrl = new URL(page.url());
+      if (loadedUrl.hostname === 'share.streamlit.io' || loadedUrl.pathname.startsWith('/-/login')) {
+        throw new Error('The app redirected to Streamlit sign-in. Save the public sharing setting, then confirm it opens in an incognito window before running this availability check.');
+      }
       if (!response || response.status() < 400) return;
       failure = new Error(`The app returned HTTP ${response.status()}.`);
       if (![403, 429, 502, 503, 504].includes(response.status())) throw failure;
@@ -34,17 +87,38 @@ async function openApp(page, target) {
   }
 }
 
+async function openReadyApp(page, target) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await openApp(page, target);
+      return await waitForState(page, 120000, true);
+    } catch (error) {
+      if (attempt === 2) throw error;
+      console.log(`The CBT interface was not detected (${error.message}). Reloading once in 15 seconds.`);
+      await page.waitForTimeout(15000);
+    }
+  }
+  throw new Error('The CBT interface could not be verified after a reload.');
+}
+
 async function run() {
   let browser;
   let page;
   try {
     const target = validatedTarget(process.argv[2]);
     console.log('Starting the CBT System availability check.');
+    if (!chromium) chromium = require('playwright').chromium;
     browser = await chromium.launch({ headless: true });
     page = await browser.newPage();
-    await openApp(page, target);
+    const wakeControl = await openReadyApp(page, target);
+    if (wakeControl) {
+      console.log('The app is asleep; requesting wake-up.');
+      await wakeControl.click({ timeout: 10000 });
+      await waitForState(page, 300000, false);
+    }
     await page.waitForTimeout(15000);
-    console.log('The CBT app connection completed successfully.');
+    if (!(await applicationIsReady(page))) throw new Error('The interface became unavailable during verification.');
+    console.log('The CBT interface is visible and responsive.');
   } catch (error) {
     console.error(`Availability check failed: ${error.message}`);
     process.exitCode = 1;

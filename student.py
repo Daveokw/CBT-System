@@ -1,6 +1,7 @@
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='pandas')
 import streamlit as st
+import streamlit.components.v1 as components
 from db import get_db_connection
 import pandas as pd
 import numpy as np
@@ -258,7 +259,7 @@ def take_exam():
     setupMalpracticeDetection();
     </script>
     """
-    st.iframe(js_code, height=1)
+    components.html(js_code, height=1)
 
     # ================================================================
     # SECURITY QUESTION CHALLENGE STATE CHECK
@@ -332,7 +333,7 @@ def take_exam():
             }}, 1000);
         </script>
         """
-    st.iframe(timer_html, height=70)
+    components.html(timer_html, height=70)
     # -------------------------------------------------------------
 
     # ================================================================
@@ -414,7 +415,7 @@ def take_exam():
                 }}, 1000);
             </script>
             """
-            st.iframe(sq_timer_html, height=65)
+            components.html(sq_timer_html, height=65)
             # ----------------------------------------
 
             sq_attempts = st.session_state.get("sq_attempts", {})

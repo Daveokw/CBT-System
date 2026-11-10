@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import warnings
 from datetime import datetime, timezone
 # Suppress the pandas SQLAlchemy warning
@@ -89,7 +90,7 @@ if demo_mode_enabled():
 st.caption("Navigation is in the left sidebar. Use the top-left arrow to show or hide it.")
 
 # Inject JS to disable browser autocomplete / password suggestions on all forms
-st.iframe("""
+components.html("""
 <script>
 function disableAutocomplete() {
     const forms = window.parent.document.querySelectorAll('form');
